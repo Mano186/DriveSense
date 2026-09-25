@@ -9,10 +9,14 @@ class SessionStore(context: Context) {
     private val prefs = context.getSharedPreferences("drivesense_sessions", Context.MODE_PRIVATE)
 
     fun save(session: DriveSession) {
-        val sessions = JSONArray(prefs.getString("sessions", "[]"))
+        val existing = JSONArray(prefs.getString("sessions", "[]"))
+        val sessions = JSONArray()
         val events = JSONArray()
         session.events.forEach { events.put(JSONObject().put("type", it.type).put("detail", it.detail).put("time", it.time)) }
-        sessions.put(0, JSONObject().put("startedAt", session.startedAt).put("duration", session.durationSeconds).put("events", events))
+        // JSONArray.put(index, value) replaces an existing value at that index;
+        // build a new list so the latest session is inserted before older sessions.
+        sessions.put(JSONObject().put("startedAt", session.startedAt).put("duration", session.durationSeconds).put("events", events))
+        for (i in 0 until existing.length()) sessions.put(existing.getJSONObject(i))
         while (sessions.length() > 20) sessions.remove(sessions.length() - 1)
         prefs.edit().putString("sessions", sessions.toString()).apply()
     }

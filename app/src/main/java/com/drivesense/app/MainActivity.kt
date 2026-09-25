@@ -2,32 +2,46 @@ package com.drivesense.app
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.Gravity
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.setPadding
-import com.google.android.material.button.MaterialButton
+import com.drivesense.app.UiKit.card
+import com.drivesense.app.UiKit.dp
+import com.drivesense.app.UiKit.primaryButton
+import com.drivesense.app.UiKit.secondaryButton
+import com.drivesense.app.UiKit.section
+import com.drivesense.app.UiKit.title
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var summary: TextView
+    private lateinit var scoreRing: ScoreRingView
     private val monitorLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        result.data?.getIntExtra(DriveMonitorActivity.EXTRA_SCORE, -1)?.takeIf { it >= 0 }?.let {
-            Toast.makeText(this, "Drive saved. Safety score: $it", Toast.LENGTH_LONG).show()
-        }
+        result.data?.getIntExtra(DriveMonitorActivity.EXTRA_SCORE, -1)?.takeIf { it >= 0 }?.let { Toast.makeText(this, "Drive saved · Safety score: $it", Toast.LENGTH_LONG).show() }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "DriveSense"
-        val pad = (24 * resources.displayMetrics.density).toInt()
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad); gravity = Gravity.CENTER_HORIZONTAL }
-        root.addView(TextView(this).apply { text = "DriveSense"; textSize = 32f; setTextColor(getColor(R.color.navy)) })
-        root.addView(TextView(this).apply { text = "A private, sensor-based driving awareness app"; textSize = 17f; setPadding(0, 8, 0, 28) })
-        val privacy = TextView(this).apply { text = "Privacy first: no GPS, camera, microphone, account, or cloud. Your sessions stay on this device."; textSize = 15f; setPadding(pad, pad, pad, pad); setBackgroundColor(getColor(R.color.pale_blue)) }
-        root.addView(privacy, LinearLayout.LayoutParams(-1, -2))
-        root.addView(Space(this), LinearLayout.LayoutParams(1, pad))
-        root.addView(MaterialButton(this).apply { text = "START DRIVE MONITOR"; setOnClickListener { monitorLauncher.launch(Intent(this@MainActivity, DriveMonitorActivity::class.java).putExtra(DriveMonitorActivity.EXTRA_FROM, "Dashboard")) } }, LinearLayout.LayoutParams(-1, -2))
-        root.addView(MaterialButton(this).apply { text = "VIEW DRIVE HISTORY"; setOnClickListener { startActivity(Intent(this@MainActivity, HistoryActivity::class.java)) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = 12 })
-        root.addView(TextView(this).apply { text = "Uses linear acceleration for acceleration/braking and gyroscope rotation for turns."; textSize = 14f; setPadding(0, 30, 0, 0) })
-        setContentView(root)
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(28), dp(20), dp(28)) }
+        val hero = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(24), dp(22), dp(22)) }.card(0xFFE1F0FF.toInt())
+        hero.addView(title("DriveSense"))
+        hero.addView(TextView(this).apply { text = "Drive with awareness, not distraction."; textSize = 17f; setPadding(0, dp(6), 0, dp(14)) })
+        hero.addView(TextView(this).apply { text = "PRIVATE BY DESIGN  •  ON-DEVICE ONLY"; textSize = 12f; letterSpacing = .10f; setPadding(0, dp(8), 0, 0) })
+        content.addView(hero, LinearLayout.LayoutParams(-1, -2))
+        content.addView(section("Your driving snapshot"), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24); bottomMargin = dp(8) })
+        val scoreCard = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(dp(16), dp(14), dp(18), dp(14)) }.card()
+        scoreRing = ScoreRingView(this); scoreCard.addView(scoreRing, LinearLayout.LayoutParams(dp(112), dp(112)))
+        summary = TextView(this).apply { textSize = 16f; setPadding(dp(14), 0, 0, 0) }; scoreCard.addView(summary, LinearLayout.LayoutParams(0, -2, 1f))
+        content.addView(scoreCard, LinearLayout.LayoutParams(-1, -2))
+        content.addView(primaryButton("START LIVE MONITOR").apply { setOnClickListener { monitorLauncher.launch(Intent(this@MainActivity, DriveMonitorActivity::class.java).putExtra(DriveMonitorActivity.EXTRA_FROM, "Dashboard")) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(24) })
+        content.addView(secondaryButton("VIEW DRIVE HISTORY").apply { setOnClickListener { startActivity(Intent(this@MainActivity, HistoryActivity::class.java)) } }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        content.addView(TextView(this).apply { text = "Powered by linear acceleration + gyroscope\nFor awareness and coursework demonstration only."; textSize = 13f; setPadding(dp(4), dp(22), dp(4), 0) })
+        setContentView(ScrollView(this).apply { addView(content) })
+    }
+    override fun onResume() { super.onResume(); updateDashboardSummary() }
+    private fun updateDashboardSummary() {
+        val sessions = SessionStore(this).all()
+        summary.text = if (sessions.isEmpty()) { scoreRing.setScore(100); "READY FOR YOUR FIRST DRIVE\nUse Safe Demo Mode to preview the complete experience." } else {
+            val average = sessions.map { it.safetyScore }.average().toInt(); val latest = sessions.first()
+            scoreRing.setScore(latest.safetyScore); "${sessions.size} SAVED DRIVE${if (sessions.size == 1) "" else "S"}\nAverage safety score  $average / 100\nLatest drive  ${latest.scoreLabel} · ${latest.safetyScore} / 100"
+        }
     }
 }
